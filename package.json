@@ -1,0 +1,10 @@
+{
+  "name": "auditoria-retencoes-nfse",
+  "version": "1.0.0",
+  "description": "App web para auditar ISS e retenções federais em NFS-e (dados fictícios)",
+  "author": "Gabriel Antônio Ribeiro",
+  "license": "MIT",
+  "type": "module",
+  "scripts": { "test": "node --test tests/*.test.mjs" },
+  "devDependencies": { "pdfjs-dist": "4.10.38" }
+}

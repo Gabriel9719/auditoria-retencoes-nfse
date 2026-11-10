@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Gabriel Antônio Ribeiro">
+<title>Auditoria de retenções em NFS-e</title>
+<style>
+  :root { --azul:#003641; --verde:#00AE9D; --verm:#C0392B; --amar:#B7791F; --cinza:#5f6b70; --linha:#dde3e6; --fundo:#f4f7f8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--fundo); color:#1d2b30; }
+  header { background:var(--azul); color:#fff; padding:22px 28px; }
+  header h1 { margin:0 0 4px; font-size:22px; }
+  header p { margin:0; opacity:.8; font-size:14px; }
+  main { max-width:1100px; margin:0 auto; padding:24px 20px 60px; display:grid; gap:20px; }
+  .card { background:#fff; border:1px solid var(--linha); border-radius:10px; padding:20px; }
+  h2 { font-size:16px; color:var(--azul); margin:0 0 14px; }
+  .drop { border:2px dashed var(--linha); border-radius:10px; padding:26px; text-align:center; color:var(--cinza); cursor:pointer; transition:.15s; }
+  .drop.ativo, .drop:hover { border-color:var(--verde); background:#f0fbf9; }
+  .exemplos { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; justify-content:center; }
+  button { font:inherit; border:1px solid var(--azul); background:#fff; color:var(--azul); border-radius:6px; padding:7px 12px; cursor:pointer; }
+  button.principal { background:var(--azul); color:#fff; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
+  label { font-size:12px; color:var(--cinza); display:block; margin-bottom:4px; }
+  input, select { width:100%; font:inherit; padding:7px 9px; border:1px solid var(--linha); border-radius:6px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:left; background:var(--azul); color:#fff; padding:8px; font-weight:600; }
+  td { padding:8px; border-bottom:1px solid var(--linha); vertical-align:top; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:20px; font-size:12px; font-weight:600; }
+  .ok { background:#d9f2e6; color:#146c43; } .div { background:#f8d7da; color:var(--verm); }
+  .motivo { font-size:12px; color:var(--cinza); }
+  .resumo { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+  .kpi { flex:1; min-width:180px; border:1px solid var(--linha); border-radius:8px; padding:12px; }
+  .kpi b { display:block; font-size:20px; color:var(--azul); }
+  .alerta { background:#fff7e6; border-left:4px solid var(--amar); padding:10px 12px; margin:8px 0; font-size:14px; }
+  .aviso { font-size:12px; color:var(--cinza); line-height:1.5; }
+  .oculto { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Auditoria de retenções em NFS-e</h1>
+  <p>Confere ISS, IRRF, PIS/COFINS/CSLL e INSS antes do pagamento · lê a DANFSe em PDF no navegador · nada é enviado a servidores</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1. Carregar a nota</h2>
+    <div class="drop" id="drop">Arraste a DANFSe em PDF aqui ou clique para escolher<input type="file" id="arquivo" accept="application/pdf" class="oculto"></div>
+    <div class="exemplos">
+      <span class="aviso">Exemplos fictícios:</span>
+      <button data-ex="01_limpeza_correta">Limpeza (correta)</button>
+      <button data-ex="02_vigilancia_aliquota_errada">Vigilância (ISS errado)</button>
+      <button data-ex="03_consultoria_simples_nacional">Consultoria Simples (IRRF indevido)</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Dados da nota (confira e ajuste se necessário)</h2>
+    <form id="form" class="grid">
+      <div><label>Item LC 116</label><select name="itemServico" id="item"></select></div>
+      <div><label>Valor do serviço (R$)</label><input name="valor" type="number" step="0.01"></div>
+      <div><label>Alíquota ISS informada (%)</label><input name="aliquotaIss" type="number" step="0.01"></div>
+      <div><label>Prestador optante pelo Simples?</label><select name="simples"><option value="nao">Não</option><option value="sim">Sim</option></select></div>
+      <div><label>Município do prestador</label><input name="munPrestador"></div>
+      <div><label>Município do tomador</label><input name="munTomador"></div>
+      <div><label>Município de incidência do ISS</label><input name="localIncidencia"></div>
+      <div><label>Tomador é substituto tributário de ISS no seu município?</label><select name="substituto"><option value="nao">Não</option><option value="sim">Sim</option></select></div>
+      <div><label>ISS retido (R$)</label><input name="iss" type="number" step="0.01"></div>
+      <div><label>IRRF retido (R$)</label><input name="irrf" type="number" step="0.01"></div>
+      <div><label>PIS retido (R$)</label><input name="pis" type="number" step="0.01"></div>
+      <div><label>COFINS retido (R$)</label><input name="cofins" type="number" step="0.01"></div>
+      <div><label>CSLL retido (R$)</label><input name="csll" type="number" step="0.01"></div>
+      <div><label>INSS retido (R$)</label><input name="inss" type="number" step="0.01"></div>
+      <div style="align-self:end"><button type="submit" class="principal">Auditar</button></div>
+    </form>
+  </section>
+
+  <section class="card oculto" id="resultado">
+    <h2>3. Resultado</h2>
+    <div class="resumo" id="kpis"></div>
+    <div id="alertas"></div>
+    <table>
+      <thead><tr><th>Tributo</th><th>Esperado</th><th>Informado</th><th>Diferença</th><th>Status</th><th>Regra aplicada</th></tr></thead>
+      <tbody id="linhas"></tbody>
+    </table>
+    <p class="aviso" id="reforma"></p>
+  </section>
+
+  <p class="aviso">Regras simplificadas e parametrizáveis (<code>js/regras.js</code>) para fins de demonstração. A tabela de alíquotas municipais e os municípios são fictícios.
+  Antes de usar em produção, valide cada regra com a legislação vigente e com a área tributária. · Autor: Gabriel Antônio Ribeiro</p>
+</main>
+
+<script type="module">
+import * as pdfjs from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
+import { extrairDanfse, itensParaLinhas } from "./js/parser.js";
+import { auditar, ITENS } from "./js/regras.js";
+pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+
+const $ = (s) => document.querySelector(s);
+const form = $("#form");
+const brl = (v) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+$("#item").innerHTML = Object.entries(ITENS).map(([k, v]) => `<option value="${k}">${k} · ${v.nome}</option>`).join("");
+
+async function lerPdf(buffer) {
+  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+  let itens = [];
+  for (let i = 1; i <= pdf.numPages; i++) itens = itens.concat((await (await pdf.getPage(i)).getTextContent()).items);
+  return extrairDanfse(itensParaLinhas(itens));
+}
+
+function preencher(nf) {
+  const f = form.elements;
+  if (nf.item && ITENS[nf.item]) f.itemServico.value = nf.item;
+  f.valor.value = nf.valor ?? ""; f.aliquotaIss.value = nf.aliquotaIss ?? "";
+  f.simples.value = nf.prestador.simples ? "sim" : "nao";
+  f.munPrestador.value = nf.prestador.municipio ?? ""; f.munTomador.value = nf.tomador.municipio ?? "";
+  f.localIncidencia.value = nf.localIncidencia ?? "";
+  for (const k of ["iss", "irrf", "pis", "cofins", "csll", "inss"]) f[k].value = nf.informado[k] ?? 0;
+  executar();
+}
+
+function lerFormulario() {
+  const f = form.elements, n = (x) => Number(f[x].value || 0);
+  return {
+    item: f.itemServico.value, valor: n("valor"), aliquotaIss: n("aliquotaIss"), localIncidencia: f.localIncidencia.value.trim(),
+    prestador: { simples: f.simples.value === "sim", municipio: f.munPrestador.value.trim() },
+    tomador: { municipio: f.munTomador.value.trim() },
+    informado: Object.fromEntries(["iss", "irrf", "pis", "cofins", "csll", "inss"].map((k) => [k, n(k)])),
+  };
+}
+
+function executar() {
+  const nf = lerFormulario();
+  const r = auditar(nf, { tomadorSubstituto: form.elements.substituto.value === "sim" });
+  const informadoLiq = nf.valor - Object.values(nf.informado).reduce((a, b) => a + b, 0);
+  $("#kpis").innerHTML = `
+    <div class="kpi"><span class="motivo">Situação</span><b style="color:${r.conforme ? "var(--verde)" : "var(--verm)"}">${r.conforme ? "Conforme" : "Revisar antes de pagar"}</b></div>
+    <div class="kpi"><span class="motivo">Valor líquido esperado</span><b>${brl(r.valorLiquidoEsperado)}</b></div>
+    <div class="kpi"><span class="motivo">Valor líquido pela nota</span><b>${brl(informadoLiq)}</b></div>`;
+  $("#alertas").innerHTML = r.alertas.map((a) => `<div class="alerta">⚠ ${a}</div>`).join("");
+  $("#linhas").innerHTML = r.linhas.map((l) => `<tr>
+      <td><b>${l.tributo}</b></td><td class="num">${brl(l.esperado)}</td><td class="num">${brl(l.informado)}</td>
+      <td class="num">${l.diferenca ? brl(l.diferenca) : "-"}</td>
+      <td><span class="tag ${l.ok ? "ok" : "div"}">${l.ok ? "OK" : "DIVERGENTE"}</span></td>
+      <td class="motivo">${l.motivo}</td></tr>`).join("");
+  $("#reforma").textContent = `Reforma tributária (2026, ano de teste): destaque informativo de CBS ${brl(r.reforma2026.cbs)} e IBS ${brl(r.reforma2026.ibs)}, sem retenção.`;
+  $("#resultado").classList.remove("oculto");
+}
+
+form.addEventListener("submit", (e) => { e.preventDefault(); executar(); });
+const drop = $("#drop"), input = $("#arquivo");
+drop.addEventListener("click", () => input.click());
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("ativo"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("ativo"));
+drop.addEventListener("drop", async (e) => { e.preventDefault(); drop.classList.remove("ativo"); carregar(e.dataTransfer.files[0]); });
+input.addEventListener("change", () => carregar(input.files[0]));
+async function carregar(arq) {
+  if (!arq) return;
+  try { preencher(await lerPdf(await arq.arrayBuffer())); drop.firstChild.textContent = `Lido: ${arq.name}`; }
+  catch (err) { alert("Não foi possível ler o PDF: " + err.message); }
+}
+document.querySelectorAll("[data-ex]").forEach((b) => b.addEventListener("click", async () => {
+  const resp = await fetch(`exemplos/${b.dataset.ex}.pdf`);
+  preencher(await lerPdf(await resp.arrayBuffer()));
+  drop.firstChild.textContent = `Exemplo carregado: ${b.textContent}`;
+}));
+</script>
+</body>
+</html>
